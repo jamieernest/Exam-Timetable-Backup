@@ -82,9 +82,7 @@ app.get('/exams/:id', (req, res) => {
                 }
             }
             else {
-                // save backup
                 res.send(response.data);
-                fs.writeFileSync(`${backupsDir}${req.params.id}_exams.html`, response.data);
             }
                 
         })
