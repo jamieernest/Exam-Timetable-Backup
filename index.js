@@ -5,14 +5,11 @@ const port = 80
 const { Client } = require('ldapts');
 const axios = require('axios').default;
 
+const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 const backupsDir = './backups/';
 if (!fs.existsSync(backupsDir)){
     fs.mkdirSync(backupsDir);
-}
-
-const usersFile = 'users.json';
-if (!fs.existsSync(usersFile)){
-    fs.writeFileSync(usersFile, '[]');
 }
 
 const url = 'ldap://ldap.bath.ac.uk:389';
@@ -42,32 +39,33 @@ async function backupExamsPage(username){
     if(response.data.includes('Exam Code')){
         fs.writeFileSync(`${backupsDir}${username}_exams.html`, response.data);
     }
+    else console.log(`No exam data found for ${username}, its probably down again.`);
 }
 
 async function backupJob(){
-    const usersData = JSON.parse(fs.readFileSync(usersFile, 'utf8'));
-    usersData.forEach((username) => {
-        backupExamsPage(username).then(() => {
-            console.log(`Backed up exams page for ${username}`);
-        }).catch((err) => {
-            console.log(`Error backing up exams page for ${username}: ${err}`);
-        });
+    const searchresults = await client.search('ou=groups,o=bath.ac.uk', {
+        filter: `(cn=susrv01-polling)`,
     });
+    for (const entry of searchresults.searchEntries[0].member) {
+        let username = entry.split(',')[0].split('=')[1];
+        try {
+            await backupExamsPage(username);
+            console.log(`Backed up exams page for ${username}`);
+        } catch (err) {
+            console.log(`Error backing up exams page for ${username}: ${err}`);
+        }
+        await wait(300000); // wait 5 minutes between requests
+    }
+    backupJob(); // repeat indefinitely
 }
 
 app.get('/exams/:id', (req, res) => {
-    let users = JSON.parse(fs.readFileSync(usersFile, 'utf8'))
-
     getStudentIDFromLdap(req.params.id).then((studentId) => {
-        if(users.includes(req.params.id) === false){
-            users.push(req.params.id);
-            fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
-        }
         let options = {
             method: 'GET',
             url: `https://samis.bath.ac.uk/examschedule/${studentId}`,
             headers: {
-            'Referer': 'https://samis.bath.ac.uk/'
+                'Referer': 'https://samis.bath.ac.uk/'
             }
         };
         axios.get(options.url, { headers: options.headers })
@@ -107,8 +105,4 @@ app.listen(port, () => {
     console.log(`Exam app listening on port ${port}`)
 })
 
-backupJob(); // run once at startup
-
-setInterval(() => {
-    backupJob();
-}, 60 * 60 * 1000); // every hour
+backupJob(); // run at startup

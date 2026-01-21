@@ -1,9 +1,6 @@
 # Backups
 backups/
 
-# Users list
-users.json
-
 # Logs
 logs
 *.log
