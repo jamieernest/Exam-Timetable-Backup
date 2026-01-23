@@ -59,6 +59,10 @@ async function backupJob(){
     backupJob(); // repeat indefinitely
 }
 
+app.get('/', (req, res) => {
+    res.redirect(`/exams/${req.get("X-User")}`)
+})
+
 app.get('/exams/:id', (req, res) => {
     getStudentIDFromLdap(req.params.id).then((studentId) => {
         let options = {
